@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Redis for short-term memory (working memory)
+  redis:
+    image: redis:7-alpine
+    container_name: agent_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command:  redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent_network
+
+  # Agent application with memory system
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: agent_app
+    environment: 
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - EMBEDDING_MODEL=all-MiniLM-L6-v2
+      - MAX_WINDOW_SIZE=10
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./examples:/app/examples
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - agent_network
+    restart: unless-stopped
+    # Uncomment for development
+    # stdin_open: true
+    # tty: true
+
+volumes:
+  redis_data: 
+    driver: local
+
+networks:
+  agent_network:
+    driver:  bridge
